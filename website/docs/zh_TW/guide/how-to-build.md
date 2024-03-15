@@ -41,7 +41,7 @@ tools/bazel build --config=fast //common:kernel_aarch64_dist
 ```
 
 :::info
-對於某些 Android 14 內核，使 Wi-Fi/藍牙正常工作。可能需要刪除所有受 GKI 保護的匯出：
+對於某些 Android 14 內核，要使 Wi-Fi/藍牙正常工作，可能需要刪除所有受 GKI 保護的匯出：
 
 ```sh
 rm common/android/abi_gki_protected_exports_*
