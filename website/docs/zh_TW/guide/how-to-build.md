@@ -40,7 +40,7 @@ LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
 tools/bazel build --config=fast //common:kernel_aarch64_dist
 ```
 
-::: INFO
+:::info
 對於某些 Android 14 內核，使 Wi-Fi/藍牙正常工作。可能需要刪除所有受 GKI 保護的匯出：
 
 ```sh
