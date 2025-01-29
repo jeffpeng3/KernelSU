@@ -1,17 +1,15 @@
 use anyhow::{bail, Context, Error, Ok, Result};
 use std::{
-    fs::{self, create_dir_all, remove_file, write, File, OpenOptions},
+    fs::{create_dir_all, remove_file, write, File, OpenOptions},
     io::{
         ErrorKind::{AlreadyExists, NotFound},
         Write,
     },
     path::Path,
     process::Command,
-    sync::OnceLock,
 };
 
 use crate::{assets, boot_patch, defs, ksucalls, module, restorecon};
-use std::fs::metadata;
 #[allow(unused_imports)]
 use std::fs::{set_permissions, Permissions};
 #[cfg(unix)]
@@ -26,7 +24,7 @@ use std::path::PathBuf;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use rustix::{
     process,
-    thread::{move_into_link_name_space, unshare, LinkNameSpaceType, UnshareFlags},
+    thread::{move_into_link_name_space, LinkNameSpaceType},
 };
 
 pub fn ensure_clean_dir(dir: impl AsRef<Path>) -> Result<()> {
@@ -143,12 +141,6 @@ pub fn switch_mnt_ns(pid: i32) -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-pub fn unshare_mnt_ns() -> Result<()> {
-    unshare(UnshareFlags::NEWNS)?;
-    Ok(())
-}
-
 fn switch_cgroup(grp: &str, pid: u32) {
     let path = Path::new(grp).join("cgroup.procs");
     if !path.exists() {
@@ -187,68 +179,6 @@ pub fn umask(_mask: u32) {
 
 pub fn has_magisk() -> bool {
     which::which("magisk").is_ok()
-}
-
-fn is_ok_empty(dir: &str) -> bool {
-    use std::result::Result::Ok;
-
-    match fs::read_dir(dir) {
-        Ok(mut entries) => entries.next().is_none(),
-        Err(_) => false,
-    }
-}
-
-fn find_temp_path() -> String {
-    use std::result::Result::Ok;
-
-    if is_ok_empty(defs::TEMP_DIR) {
-        return defs::TEMP_DIR.to_string();
-    }
-
-    // Try to create a random directory in /dev/
-    let r = tempdir::TempDir::new_in("/dev/", "");
-    match r {
-        Ok(tmp_dir) => {
-            if let Some(path) = tmp_dir.into_path().to_str() {
-                return path.to_string();
-            }
-        }
-        Err(_e) => {}
-    }
-
-    let dirs = [
-        defs::TEMP_DIR,
-        "/patch_hw",
-        "/oem",
-        "/root",
-        defs::TEMP_DIR_LEGACY,
-    ];
-
-    // find empty directory
-    for dir in dirs {
-        if is_ok_empty(dir) {
-            return dir.to_string();
-        }
-    }
-
-    // Fallback to non-empty directory
-    for dir in dirs {
-        if metadata(dir).is_ok() {
-            return dir.to_string();
-        }
-    }
-
-    "".to_string()
-}
-
-pub fn get_tmp_path() -> &'static str {
-    static CHOSEN_TMP_PATH: OnceLock<String> = OnceLock::new();
-
-    CHOSEN_TMP_PATH.get_or_init(|| {
-        let r = find_temp_path();
-        log::info!("Chosen temp_path: {}", r);
-        r
-    })
 }
 
 #[cfg(target_os = "android")]
@@ -322,7 +252,7 @@ pub fn copy_sparse_file<P: AsRef<Path>, Q: AsRef<Path>>(
     for segment in segments {
         if let SegmentType::Data = segment.segment_type {
             let start = segment.start;
-            let end = segment.end;
+            let end = segment.end + 1;
 
             src_file.seek(SeekFrom::Start(start))?;
             dst_file.seek(SeekFrom::Start(start))?;
